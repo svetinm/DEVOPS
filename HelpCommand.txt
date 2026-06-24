@@ -1,0 +1,528 @@
+Ovo bih radio kao **LO4 + LO5 bootcamp**. Cilj nije naučiti napamet YAML nego da za svaki problem znaš što upisati.
+
+# LAB 1 – Deployment i Service
+
+## 1. Kreiraj deployment
+
+```bash
+kubectl create deployment web \
+  --image=nginx:1.25
+```
+
+Provjera:
+
+```bash
+kubectl get deployments
+kubectl get rs
+kubectl get pods
+```
+
+Pitanja:
+
+* Što je Deployment?
+* Što je ReplicaSet?
+* Što je Pod?
+
+---
+
+## 2. Skaliranje
+
+```bash
+kubectl scale deployment web \
+  --replicas=3
+```
+
+Provjera:
+
+```bash
+kubectl get pods
+kubectl get rs
+```
+
+---
+
+## 3. Izloži aplikaciju
+
+```bash
+kubectl expose deployment web \
+  --port=80 \
+  --type=NodePort
+```
+
+Provjera:
+
+```bash
+kubectl get svc
+```
+
+---
+
+## 4. Test
+
+```bash
+minikube service web --url
+```
+
+Otvori URL.
+
+---
+
+# LAB 2 – Rollout i Rollback
+
+## Nadogradnja
+
+```bash
+kubectl set image deployment/web \
+  nginx=nginx:1.27
+```
+
+Provjera:
+
+```bash
+kubectl rollout status deployment/web
+```
+
+---
+
+## Povijest
+
+```bash
+kubectl rollout history deployment/web
+```
+
+---
+
+## Povratak
+
+```bash
+kubectl rollout undo deployment/web
+```
+
+Provjera:
+
+```bash
+kubectl describe deployment web
+```
+
+---
+
+# LAB 3 – Export YAML
+
+Kreiraj:
+
+```bash
+kubectl create deployment apache \
+  --image=httpd:2.4 \
+  --dry-run=client \
+  -o yaml > apache.yaml
+```
+
+Pregled:
+
+```bash
+cat apache.yaml
+```
+
+Primijeni:
+
+```bash
+kubectl apply -f apache.yaml
+```
+
+Briši:
+
+```bash
+kubectl delete -f apache.yaml
+```
+
+---
+
+# LAB 4 – ConfigMap
+
+## Kreiraj
+
+```bash
+kubectl create configmap app-config \
+  --from-literal=ENV=PROD
+```
+
+Provjera:
+
+```bash
+kubectl get configmap
+kubectl describe configmap app-config
+```
+
+---
+
+## YAML
+
+```bash
+kubectl get configmap app-config \
+  -o yaml
+```
+
+---
+
+# LAB 5 – Secret
+
+## Kreiraj
+
+```bash
+kubectl create secret generic db-secret \
+  --from-literal=username=admin \
+  --from-literal=password=secret123
+```
+
+Provjera:
+
+```bash
+kubectl get secrets
+```
+
+---
+
+## Pregled
+
+```bash
+kubectl get secret db-secret \
+  -o yaml
+```
+
+Dekodiranje:
+
+```bash
+echo YWRtaW4= | base64 -d
+```
+
+---
+
+# LAB 6 – PersistentVolumeClaim
+
+Provjeri:
+
+```bash
+kubectl get storageclass
+```
+
+---
+
+PVC.yaml
+
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: test-pvc
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+```
+
+Primjena:
+
+```bash
+kubectl apply -f pvc.yaml
+```
+
+Provjera:
+
+```bash
+kubectl get pvc
+```
+
+---
+
+# LAB 7 – Job
+
+job.yaml
+
+```yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: test-job
+spec:
+  template:
+    spec:
+      containers:
+      - name: test
+        image: busybox
+        command: ["echo","Hello"]
+      restartPolicy: Never
+```
+
+Pokreni:
+
+```bash
+kubectl apply -f job.yaml
+```
+
+Provjera:
+
+```bash
+kubectl get jobs
+kubectl get pods
+```
+
+Logovi:
+
+```bash
+kubectl logs PODNAME
+```
+
+---
+
+# LAB 8 – CronJob
+
+cronjob.yaml
+
+```yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: test-cron
+spec:
+  schedule: "* * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: date
+            image: busybox
+            command:
+            - date
+          restartPolicy: Never
+```
+
+Primjena:
+
+```bash
+kubectl apply -f cronjob.yaml
+```
+
+Provjera:
+
+```bash
+kubectl get cronjobs
+kubectl get jobs
+```
+
+---
+
+# LAB 9 – StatefulSet
+
+Kreiraj Redis StatefulSet.
+
+Provjeri:
+
+```bash
+kubectl get statefulsets
+kubectl get pods
+```
+
+Moraš vidjeti:
+
+```text
+redis-0
+redis-1
+redis-2
+```
+
+Pitanje:
+
+Zašto Deployment ne daje ovakva imena?
+
+---
+
+# LO5 – Troubleshooting
+
+Ovo radi svaki dan.
+
+# Problem 1
+
+Kreiraj namjerno loš image:
+
+```yaml
+image: nginx:99999
+```
+
+Primijeni.
+
+Provjera:
+
+```bash
+kubectl get pods
+```
+
+Vidjet ćeš:
+
+```text
+ImagePullBackOff
+```
+
+Dijagnostika:
+
+```bash
+kubectl describe pod POD
+```
+
+Nađi razlog.
+
+---
+
+# Problem 2
+
+CrashLoopBackOff
+
+Pod:
+
+```yaml
+command:
+- exit
+```
+
+Provjera:
+
+```bash
+kubectl get pods
+```
+
+Dijagnostika:
+
+```bash
+kubectl logs POD --previous
+```
+
+---
+
+# Problem 3
+
+Service ne radi
+
+Deployment:
+
+```yaml
+labels:
+  app: nginx
+```
+
+Service:
+
+```yaml
+selector:
+  app: apache
+```
+
+Provjera:
+
+```bash
+kubectl get endpoints
+```
+
+Bit će:
+
+```text
+<none>
+```
+
+Pronađi problem.
+
+---
+
+# Problem 4
+
+Pending
+
+Napravi:
+
+```yaml
+resources:
+  requests:
+    memory: 100Gi
+```
+
+Provjera:
+
+```bash
+kubectl get pods
+```
+
+Dijagnostika:
+
+```bash
+kubectl describe pod POD
+```
+
+Nađi:
+
+```text
+Insufficient memory
+```
+
+---
+
+# Problem 5
+
+Debug pod
+
+Pokreni:
+
+```bash
+kubectl run tmp \
+  --rm -it \
+  --image=busybox \
+  -- sh
+```
+
+Testiraj:
+
+```bash
+nslookup kubernetes.default
+
+wget web
+```
+
+---
+
+# Naredbe koje moraš znati bez gledanja
+
+```bash
+kubectl get all
+
+kubectl get pods
+
+kubectl get svc
+
+kubectl get pvc
+
+kubectl describe pod POD
+
+kubectl logs POD
+
+kubectl logs POD --previous
+
+kubectl exec -it POD -- sh
+
+kubectl get endpoints
+
+kubectl get events --sort-by=.lastTimestamp
+
+kubectl rollout status deployment/APP
+
+kubectl rollout history deployment/APP
+
+kubectl rollout undo deployment/APP
+
+kubectl scale deployment APP --replicas=5
+
+kubectl expose deployment APP --port=80
+
+kubectl set image deployment/APP CONTAINER=IMAGE
+```
+
+Ako odradiš svih 9 labova i svih 5 troubleshooting scenarija bez gledanja u skriptu, bit ćeš spreman za većinu LO4 i LO5 zadataka iz dokumenta.
