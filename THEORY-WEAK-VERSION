@@ -1,0 +1,89 @@
+Networking & Storage Architecture
+1. Analyze the networking model of Kubernetes versus Docker's network.
+[Certain] Docker natively relies on isolated bridge networks per host, meaning containers on different physical machines cannot communicate without manual port forwarding or complex overlay setups (like Swarm). [Certain] Kubernetes mandates a flat, un-NATed network topology. Every Pod gets its own unique IP address across the entire cluster, and any Pod can communicate with any other Pod directly.
+
+Extra Exam Context: This K8s requirement is fulfilled by the Container Network Interface (CNI) standard, utilizing plugins like Calico, Flannel, or Cilium to manage the routing tables dynamically.
+
+2. Evaluate Kubernetes storage abstraction against Podman’s storage plugins.
+[Certain] Kubernetes is vastly superior for distributed, stateful workloads. K8s uses the Container Storage Interface (CSI), which decouples the storage implementation from the pod logic via PersistentVolumes (PV), PersistentVolumeClaims (PVC), and StorageClasses. This allows dynamic provisioning (e.g., asking AWS for an EBS volume on the fly). [Likely] Podman is fundamentally a single-node engine; its storage mechanisms are limited to local bind mounts or local named volumes. It lacks a control plane to orchestrate block storage across a fleet of physical machines.
+
+14. Compare storage provisioning between Kubernetes and regular VM workloads.
+[Certain] In traditional VM infrastructure, storage (LUNs, vmdks) is statically attached to a specific virtual machine at the hypervisor level. [Certain] Kubernetes treats storage as a floating, dynamic resource. Because Pods are ephemeral and can be rescheduled to different physical worker nodes at any time, K8s dynamically unmounts the block storage from the dead node and remounts it to the new node holding the replacement Pod.
+
+Developer Experience & Extensibility
+3. Evaluate the operator pattern vs. using only k8s manifests.
+[Certain] Standard manifests (Deployment, StatefulSet) define static desired state, but they have no domain-specific knowledge. If a MySQL database requires a specific sequence of commands to perform a backup or a leader election, standard K8s cannot do it. [Certain] Operators combine Custom Resource Definitions (CRDs) with custom controller code. They codify human operational knowledge into software, allowing K8s to automatically manage the day-2 lifecycle (upgrades, backups, failovers) of complex stateful applications.
+
+4. Assess the developer experience: Plain Kubernetes vs. OpenShift.
+[Certain] Plain Kubernetes optimizes for Platform Engineers; it provides raw infrastructure APIs but forces you to build your own CI/CD pipelines, ingress controllers, and monitoring stacks. [Certain] OpenShift optimizes for Application Developers. With features like Source-to-Image (S2I), a developer can provide a Git URL, and OpenShift will automatically pull the code, detect the language, compile the container, push it to an internal registry, and deploy it—without the developer ever writing a Dockerfile or K8s YAML.
+
+5. Critically evaluate migrating a workload from OpenShift to Kubernetes.
+[Likely] This migration is often a step backward in developer velocity and requires stripping out proprietary Red Hat abstractions.
+
+Routes must be converted to Ingresses.
+
+ImageStreams must be replaced with standard external registries.
+
+DeploymentConfigs must become standard Deployments.
+
+SecurityContextConstraints (SCCs) must be mapped to Pod Security Admissions.
+
+Extra Exam Context: You are moving from a "batteries-included" platform to a "build-it-yourself" platform.
+
+Security & Operational Boundaries
+8. Default security and hardening: OpenShift vs. Vanilla Kubernetes.
+[Certain] OpenShift operates under a "secure-by-default" paradigm. Out of the box, OpenShift uses Security Context Constraints (SCCs) to strictly forbid any container from running as the root user or using privileged host access. [Certain] Historically, vanilla K8s allowed root execution by default and required engineers to manually configure Pod Security Policies. Enterprises in finance and healthcare choose OpenShift because it meets strict compliance mandates (like FIPS 140-2) without requiring the platform team to build security policies from scratch.
+
+16. Compare Docker and Podman in terms of architecture and security.
+[Certain] Docker relies on a centralized, constantly running background daemon that operates with root privileges. If a hacker escapes a Docker container, they gain root access to the entire host OS. [Certain] Podman uses a daemonless fork-exec architecture and runs rootless by default. Containers run as standard user processes. A security-conscious team prefers Podman because a container breakout only yields standard user privileges, neutralizing systemic host compromise.
+
+6. Running CI/CD build agents in Kubernetes vs. dedicated VMs.
+[Certain] Running agents (like Jenkins or GitLab runners) in K8s provides dynamic autoscaling—the cluster spins up a Pod to execute a build and destroys it immediately after, saving massive compute costs compared to static VMs that sit idle. [Likely] The critical trade-off is the "noisy-neighbor" effect. A heavy Java compilation job running on the same worker node as a production database can starve the database of CPU/RAM if proper requests and limits are not strictly enforced.
+
+Scale, Footprint & Platform Selection
+10. Compare the resource footprint of full Kubernetes vs. k3s.
+[Certain] Full Kubernetes is a heavyweight system requiring a distributed etcd database, robust control plane components, and significant RAM overhead just to keep the cluster alive. It is overkill for edge computing or IoT. [Certain] k3s strips out legacy cloud-provider code, replaces etcd with a lightweight SQLite database, and compiles all control plane components into a single sub-100MB binary. It is designed for single-node setups, edge devices (Raspberry Pis), and resource-constrained on-premise environments.
+
+11. Docker Compose on a single host vs. moving straight to Kubernetes.
+[Likely] A small team should stay on Docker Compose until the business strictly demands multi-node high availability. Kubernetes introduces an astronomical cognitive load—requiring knowledge of Ingress, PVCs, RBAC, and Service discovery. Moving straight to K8s prematurely guarantees the team will spend more time fighting infrastructure than writing product code.
+
+15. A startup with two engineers must ship quickly and cheaply.
+[Likely] Neither Docker Compose nor Kubernetes is the correct choice here. A two-person team should use Managed Serverless Containers (e.g., AWS Fargate, Google Cloud Run, or Azure Container Apps).
+
+Justification: Zero control-plane operational overhead, scale-to-zero cost efficiency, and instantaneous deployment. The engineers focus purely on the application logic.
+
+18. A media-streaming company expects spiky global traffic.
+[Certain] The solution is a Managed Kubernetes service (Amazon EKS or GKE) leveraging the Horizontal Pod Autoscaler (HPA) and the Cluster Autoscaler.
+
+Justification: Streaming traffic is highly volatile. K8s will automatically monitor CPU/Memory thresholds and replicate application Pods within seconds. If the physical nodes run out of space, the Cluster Autoscaler will automatically purchase new VMs from the cloud provider, attach them, and scale them down when the traffic spike ends.
+
+Day-2 Operations & The Enterprise
+7. How does Kubernetes integrate with cloud environments?
+[Certain] Through the Cloud Controller Manager (CCM) and Container Storage Interface (CSI) drivers. When you create a Service of type LoadBalancer in K8s, the CCM issues an API call to AWS/Azure to physically provision a cloud load balancer and wire it to the cluster nodes.
+
+17. Day-2 operational overhead: Self-managed vs. Managed Kubernetes.
+[Certain] Self-managed K8s (kubeadm) requires your team to manually back up the etcd state, execute rolling upgrades of the control plane API servers, manage SSL certificates, and patch host OS vulnerabilities. [Certain] Managed K8s (EKS, GKE, AKS) completely abstracts the control plane. The cloud provider handles master node high-availability, database backups, and upgrades. Your operational overhead is reduced solely to managing the worker nodes and application manifests.
+
+19. Migrating from Docker Swarm to Kubernetes.
+[Certain] Docker Swarm is effectively a dead technology with no major cloud provider backing. [Likely] The migration effort is steep (converting Compose files to K8s Deployments, ConfigMaps, and Services), but the long-term benefits are absolute. Kubernetes offers a massive CNCF ecosystem (Helm, Prometheus, Istio) and future-proofs the infrastructure against vendor abandonment.
+
+12. Vendor lock-in: Kubernetes (CNCF) vs. OpenShift (Red Hat).
+[Certain] Vanilla K8s utilizes open standards. An application defined in standard K8s YAML can be moved from AWS EKS to Google GKE with minimal friction. [Certain] OpenShift restricts long-term flexibility. By relying on Red Hat specific primitives (BuildConfig, Route, ImageStream), your infrastructure becomes locked to the OpenShift ecosystem, making migration to a competing cloud provider's native K8s service highly expensive and time-consuming.
+
+Strategic Justifications (Microservices & Enterprise)
+20. Kubernetes for Microservices.
+[Certain] Kubernetes was fundamentally designed for microservices. I defend its use because it natively solves the hardest problems of distributed computing: dynamic service discovery (CoreDNS), load balancing across hundreds of identical containers, self-healing (liveness probes), and automated rolling deployments without downtime.
+
+21. Kubernetes for Enterprise-Grade Applications.
+[Certain] I defend its use for the enterprise strictly based on its extensibility. The enterprise requires robust observability, service meshes, and custom policy enforcement (OPA/Gatekeeper). The vanilla K8s API allows enterprises to plug in industry-standard CNCF tools to build a highly customized, massively scalable platform tailored to their specific compliance needs.
+
+22. OpenShift for Microservices.
+[Likely] I would choose OpenShift for microservices if the engineering team lacks dedicated DevOps personnel. OpenShift automatically injects the necessary routing layers and provides an integrated developer console that visualizes the microservice mesh, reducing the friction of managing dozens of independent repositories.
+
+23. OpenShift for Enterprise-Grade Applications.
+[Certain] I recommend OpenShift for the enterprise because it is a "Build vs. Buy" decision, and OpenShift represents "Buy".
+
+Justification: Enterprises need single-sign-on (SSO), integrated Prometheus monitoring, EFK logging stacks, and guaranteed SLAs. OpenShift packages the open-source K8s core with heavily tested, enterprise-grade tooling and backs it with Red Hat's 24/7 commercial support.
+
+13. Defend OpenShift over vanilla Kubernetes for an integrated platform.
+[Certain] If a company wants integrated tooling, vanilla K8s is a terrible choice. Vanilla K8s forces the company to assign 3 to 5 highly paid engineers to spend months selecting, integrating, and patching disparate open-source tools (e.g., gluing ArgoCD, Prometheus, ELK, and Nginx together). OpenShift delivers all of this out-of-the-box on day one, allowing the business to focus on delivering product value rather than building an internal platform.
